@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sarcomics_webapp"
+version = "0.1"
+license = "Apache-2.0"
+description="Webapp of the SARCOMICS project"
+authors = [
+  { name="Lisa Bonheme", email="bonhemel@iarc.who.int" },
+]
+classifiers=[
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+readme = "README.md"
+keywords= ["machine learning", "deep learning", "omics data", "XAI"]
+requires-python = ">=3.9"
+
+dependencies = [
+    "pandas",
+    "streamlit",
+    "pyarrow",
+    "altair[all]",
+]
+
+[tool.setuptools.packages.find]
+where = ["app"]
