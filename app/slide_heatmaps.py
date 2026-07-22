@@ -6,7 +6,6 @@ def retrieve_data(data_path, img_path):
     df['case_id_short'] = df.case_id
     df.case_id = [x.split('_')[1] for x in df.image]
     df['image'] = df['image'].apply(lambda x: f"{img_path}/{x}")
-    df['url'] = [f"{img_path}/{x}_heatmap_overlay_only_False.png" for x in df.case_id]
     return df
 
 def plot_slide_heatmap(df):
@@ -25,7 +24,6 @@ def plot_slide_heatmap(df):
         color=color,
         tooltip=['case_id_short', 'histological_type', 'image'],
         fill=alt.when(click).then(alt.value('red')),
-        href='url',
     ).add_params(
         click, brush
     )
