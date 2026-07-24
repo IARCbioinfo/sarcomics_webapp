@@ -1,10 +1,15 @@
 import pickle
+import sys
 from pathlib import Path
 import altair as alt
 import h5py
 import numpy as np
 import pandas as pd
 import streamlit as st
+
+# pca_model.pkl/min_max_norm.pkl were pickled with `linear_transformers` as a
+# top-level module; unpickling needs it importable as such regardless of cwd.
+sys.path.insert(0, str(Path(__file__).parent))
 
 alt.data_transformers.disable_max_rows()
 
