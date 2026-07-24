@@ -1,5 +1,6 @@
 import altair as alt
 import pandas as pd
+import streamlit as st
 
 def retrieve_data(data_path, img_path):
     df = pd.read_csv(f"{data_path}/sarcoma_score_heatmaps.tsv", sep="\t")
@@ -35,10 +36,16 @@ def plot_slide_heatmap(df):
         selection
     )
 
-    (points | legend)
+    return points | legend
 
 def main():
+    st.markdown(
+        "<style>#vg-tooltip-element img {max-width: min(350px, 40vw); max-height: min(250px, 40vh);}</style>",
+        unsafe_allow_html=True,
+    )
     df = retrieve_data("app/data", "app/static")
-    plot_slide_heatmap(df)
+    # No use_container_width: stretching to container width forces Vega to
+    # refit the concatenated chart and clips the legend's right-oriented axis labels.
+    st.altair_chart(plot_slide_heatmap(df))
 
 main()

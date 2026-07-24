@@ -2,3 +2,6 @@ pandas
 streamlit
 pyarrow
 altair[all]
+h5py
+scikit-learn
+numpy

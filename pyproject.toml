@@ -23,6 +23,9 @@ dependencies = [
     "streamlit",
     "pyarrow",
     "altair[all]",
+    "h5py",
+    "scikit-learn",
+    "numpy",
 ]
 
 [tool.setuptools.packages.find]
