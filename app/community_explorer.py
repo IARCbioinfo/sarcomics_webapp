@@ -1,12 +1,7 @@
 
-import os
-from concurrent.futures import ThreadPoolExecutor
-
 import altair as alt
 import pandas as pd
-import requests
 import streamlit as st
-import streamlit.components.v1 as components
 from PIL import Image
 
 DATA_PATH = "app/data"
@@ -16,58 +11,22 @@ ANNOTATIONS = {"CoNSeP": "consep", "NuCLS": "nucls"}
 
 def cell_percentages_per_community(name):
     """Cell type percentages of each leiden community, one row per community.
-
-    Not cached: the file is a handful of rows, and caching it served stale annotations
-    after the tsv was regenerated.
     """
     path = f"{DATA_PATH}/leiden_communities_annotations_percentage_{name}.tsv"
     return pd.read_csv(path, sep="\t").set_index("Community")
 
 
-DICOMWEB = ("https://proxy.imaging.datacommons.cancer.gov/current"
-            "/viewer-only-no-downloads-see-tinyurl-dot-com-slash-3j3d9jyp/dicomWeb")
-SLIM = "https://viewer.imaging.datacommons.cancer.gov/slim/studies"
+def aspect(path):
+    with Image.open(path) as image:  # lazy, only the header is read
+        return image.size[0] / image.size[1]
 
 
-def _first(item, tag):
-    value = item.get(tag, {}).get("Value")
-    return value[0] if value else None
+def retrieve_data():
+    """Slides, tiles and sarcoma scores of every community, one row per slide.
 
-
-@st.cache_data(show_spinner="Locating the slides on the IDC...")
-def idc_viewer_urls(barcodes):
-    """Resolve a whole panel of slides at once - a lookup is ~1s, so run them in parallel."""
-    with ThreadPoolExecutor(max_workers=8) as pool:
-        return dict(zip(barcodes, pool.map(idc_viewer_url, barcodes)))
-
-
-@st.cache_data(show_spinner=False)
-def idc_viewer_url(barcode):
-    """IDC slim viewer URL for one slide barcode, e.g. TCGA-DX-A3U7-01Z-00-DX1.
-
-    The slim viewer shows the one slide, unlike the GDC viewer which lists the whole case.
-    Resolved on demand through DICOMweb: a QIDO round trip per slide is about a second, too
-    slow to do for a whole community up front. The patient is the DICOM study; the slide is
-    the SM series whose description ends in the same DX number as the barcode.
+    Not cached: the load is 3 tsvs and 300 PNG headers, and @st.cache_data keys on
+    arguments only, so it kept serving stale rows after the tsvs were regenerated.
     """
-    patient, slide = barcode[:12], barcode.split("-")[-1]
-    try:
-        studies = requests.get(f"{DICOMWEB}/studies", params={"PatientID": patient}, timeout=30)
-        for study in studies.json():
-            study_uid = _first(study, "0020000D")
-            series = requests.get(f"{DICOMWEB}/studies/{study_uid}/series", timeout=40).json()
-            for item in series:
-                description = _first(item, "0008103E") or ""
-                if _first(item, "00080060") == "SM" and description.split()[-1].upper() == slide:
-                    return f"{SLIM}/{study_uid}/series/{_first(item, '0020000E')}"
-    except Exception as error:  # noqa: BLE001 - a dead API must not take the page down
-        st.warning(f"IDC lookup failed ({error}).")
-    return None
-
-
-@st.cache_data
-def retrieve_data(_stamp):
-    """_stamp is the mtimes of the source tsvs, so regenerating them busts the cache."""
     slides = pd.read_csv(f"{DATA_PATH}/slides.tsv", sep="\t")
     tiles = pd.read_csv(f"{DATA_PATH}/tiles.tsv", sep="\t")
     df = slides.rename(columns={"image": "slide"})
@@ -76,7 +35,8 @@ def retrieve_data(_stamp):
     # tile names are <case_id>_<x>_<y>_community_<n>.png
     coords = [x.split("_community")[0].split("_")[-2:] for x in df.tile]
     df[["x", "y"]] = [[int(x), int(y)] for x, y in coords]
-    df["barcode"] = [x.split("_community")[0].split(".")[0] for x in df.slide]
+    # viewer_url is resolved offline by app/idc_links.py, absent until that has been run
+    df["viewer_url"] = slides.get("viewer_url")
     df["tile"] = f"{IMG_PATH}/" + df.tile
     df["slide"] = f"{IMG_PATH}/" + df.slide
     scores = pd.read_csv(f"{DATA_PATH}/sarcoma_score_heatmaps.tsv", sep="\t")
@@ -87,7 +47,7 @@ def retrieve_data(_stamp):
     )
     # slide heatmaps have wildly different shapes (0.68 to 3.53), the layout needs their aspect
     for column in ("tile", "slide"):
-        df[f"{column}_aspect"] = [Image.open(p).size[0] / Image.open(p).size[1] for p in df[column]]
+        df[f"{column}_aspect"] = [aspect(p) for p in df[column]]
     return df
 
 
@@ -175,29 +135,37 @@ def image_panel(title, df, url, tooltip, linkable=False, **grid):
         st.altair_chart(plot_image_grid(df, url, tooltip, **grid), width="content")
         return
 
-    df = df.assign(viewer_url=df.barcode.map(idc_viewer_urls(tuple(sorted(df.barcode)))))
-    missing = df.viewer_url.isna().sum()
+    linked = df.dropna(subset=["viewer_url"])
+    missing = len(df) - len(linked)
     if missing:
-        st.caption(f"{missing} slide(s) not found on the IDC, those are not clickable.")
-    chart = plot_image_grid(df.dropna(subset=["viewer_url"]), url, tooltip, href=True, **grid)
+        st.caption(f"{missing} slide(s) without an IDC link, those are not clickable "
+                   "(run `python -m app.idc_links` to resolve them).")
+    if linked.empty:
+        # an empty grid has a negative height, which renders as a broken empty box
+        st.altair_chart(plot_image_grid(df, url, tooltip, **grid), width="content")
+        return
+
+    chart = plot_image_grid(linked, url, tooltip, href=True, **grid)
     fallback = "".join(
         f'<a href="{row.viewer_url}" target="_blank"><img src="{getattr(row, url)}" width="120"></a>'
-        for row in df.dropna(subset=["viewer_url"]).itertuples()
+        for row in linked.itertuples()
     )
-    components.html(
+    # st.iframe, not components.v1.html: same srcdoc iframe and same sandbox (allow-popups,
+    # which is what lets a slide open in a new tab), but html is removed after 2026-06-01.
+    # Sizes must be ints, the grid height is a float.
+    st.iframe(
         EMBED_TEMPLATE.format(
             spec=chart.to_json(indent=None),
             fallback=fallback,
             scripts="".join(f'<script src="{src}"></script>' for src in VEGA_CDN),
         ),
-        height=chart.height + 30,
-        width=chart.width + 30,
+        height=round(chart.height) + 30,
+        width=round(chart.width) + 30,
     )
 
 
 def main():
-    sources = ("slides.tsv", "tiles.tsv", "sarcoma_score_heatmaps.tsv")
-    df = retrieve_data(tuple(os.path.getmtime(f"{DATA_PATH}/{f}") for f in sources))
+    df = retrieve_data()
     communities = sorted(df.community.unique())
     community = st.sidebar.selectbox("Community", communities)
     selected = df[df.community == community]
