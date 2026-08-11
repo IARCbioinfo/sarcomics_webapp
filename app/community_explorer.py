@@ -6,13 +6,25 @@ from PIL import Image
 
 DATA_PATH = "app/data"
 IMG_PATH = "app/static"
-ANNOTATIONS = {"CoNSeP": "consep", "NuCLS": "nucls"}
+TAXONOMY = "https://tio-ikim.github.io/CellViT-Inference/examples.html"
+# name -> file slug, tooltip; the cell types themselves come from the CellViT taxonomies
+ANNOTATIONS = {
+    "CoNSeP": ("consep",
+               "Colorectal Nuclear Segmentation and Phenotypes: 24,319 nuclei from 41 H&E "
+               "images, classified as other, inflammatory, epithelial or spindle-shaped. "
+               f"[CellViT taxonomy]({TAXONOMY}#consep-classification)"),
+    "NuCLS": ("nucls",
+              "Nucleus Classification, Localization and Segmentation: over 220,000 nuclei "
+              "from TCGA breast cancer images, classified as tumor, stromal, sTIL or other. "
+              f"[CellViT taxonomy]({TAXONOMY}#nucls-classification)"),
+}
+PAGE = 20  # tiles per "show more" click
 
 
-def cell_percentages_per_community(name):
+def cell_percentages_per_community(name, suffix):
     """Cell type percentages of each leiden community, one row per community.
     """
-    path = f"{DATA_PATH}/leiden_communities_annotations_percentage_{name}.tsv"
+    path = f"{DATA_PATH}/leiden_communities_annotations_percentage_{name}{suffix}.tsv"
     return pd.read_csv(path, sep="\t").set_index("Community")
 
 
@@ -21,14 +33,14 @@ def aspect(path):
         return image.size[0] / image.size[1]
 
 
-def retrieve_data():
+def retrieve_data(suffix):
     """Slides, tiles and sarcoma scores of every community, one row per slide.
 
     Not cached: the load is 3 tsvs and 300 PNG headers, and @st.cache_data keys on
     arguments only, so it kept serving stale rows after the tsvs were regenerated.
     """
-    slides = pd.read_csv(f"{DATA_PATH}/slides.tsv", sep="\t")
-    tiles = pd.read_csv(f"{DATA_PATH}/tiles.tsv", sep="\t")
+    slides = pd.read_csv(f"{DATA_PATH}/slides{suffix}.tsv", sep="\t")
+    tiles = pd.read_csv(f"{DATA_PATH}/tiles{suffix}.tsv", sep="\t")
     df = slides.rename(columns={"image": "slide"})
     df["tile"] = tiles.image
     df["case_id"] = [x[:12] for x in df.slide]
@@ -39,10 +51,14 @@ def retrieve_data():
     df["viewer_url"] = slides.get("viewer_url")
     df["tile"] = f"{IMG_PATH}/" + df.tile
     df["slide"] = f"{IMG_PATH}/" + df.slide
-    scores = pd.read_csv(f"{DATA_PATH}/sarcoma_score_heatmaps.tsv", sep="\t")
+    # the pancancer cases are absent from the heatmap scores, they carry a z score as well
+    name, columns = (("cryptic_sarcomas", ["sarcoma_score", "z_score"]) if suffix
+                     else ("sarcoma_score_heatmaps", ["sarcoma_score_wsi"]))
+    scores = pd.read_csv(f"{DATA_PATH}/{name}.tsv", sep="\t")
     # inner: cases with no sarcoma score are not shown at all
     df = df.merge(
-        scores[["case_id", "histological_type", "sarcoma_score_wsi"]],
+        scores[["case_id", "histological_type"] + columns].rename(
+            columns={"sarcoma_score_wsi": "sarcoma_score"}),
         on="case_id", how="inner",
     )
     # slide heatmaps have wildly different shapes (0.68 to 3.53), the layout needs their aspect
@@ -51,7 +67,7 @@ def retrieve_data():
     return df
 
 
-def plot_cell_proportions(percentages, community, title):
+def plot_cell_proportions(percentages, community):
     if community not in percentages.index:
         return None
     row = percentages.loc[community]
@@ -67,7 +83,8 @@ def plot_cell_proportions(percentages, community, title):
     labels = bars.mark_text(align="left", dx=4, color="gray").encode(
         text=alt.Text("proportion:Q", format=".1%")
     )
-    return (bars + labels).properties(title=f"{title} — community {community}")
+    # titled by the caller instead, so the name can carry a tooltip
+    return bars + labels
 
 
 def plot_image_grid(df, url, tooltip, href=False, columns=3, size=160, gap=10, max_aspect=1.6):
@@ -165,14 +182,17 @@ def image_panel(title, df, url, tooltip, linkable=False, **grid):
 
 
 def main():
-    df = retrieve_data()
+    pancancer = st.sidebar.checkbox("Use pancancer data", value=True)
+    suffix = "_cryptic_sarcoma" if pancancer else ""
+    df = retrieve_data(suffix)
     communities = sorted(df.community.unique())
     community = st.sidebar.selectbox("Community", communities)
     selected = df[df.community == community]
 
     with st.sidebar:
-        for title, name in ANNOTATIONS.items():
-            chart = plot_cell_proportions(cell_percentages_per_community(name), community, title)
+        for title, (name, description) in ANNOTATIONS.items():
+            st.markdown(f"**{title}** — community {community}", help=description)
+            chart = plot_cell_proportions(cell_percentages_per_community(name, suffix), community)
             if chart is None:
                 st.info(f"No {title} annotation for community {community}.")
             else:
@@ -181,11 +201,20 @@ def main():
     case = [
         alt.Tooltip("case_id:N", title="case"),
         alt.Tooltip("histological_type:N", title="histological type"),
-        alt.Tooltip("sarcoma_score_wsi:Q", title="sarcoma score", format=".2f"),
+        alt.Tooltip("sarcoma_score:Q", title="sarcoma score", format=".2f"),
     ]
+    if "z_score" in selected:
+        case.append(alt.Tooltip("z_score:Q", title="z score", format=".2f"))
     tiles, slides = st.columns(2)
     with tiles:
-        image_panel("Tiles", selected, "tile", case + ["x:Q", "y:Q"])
+        # keyed per community so switching community starts from 20 again
+        key = f"tiles_shown_{suffix}_{community}"
+        shown = st.session_state.get(key, PAGE)
+        image_panel("Tiles", selected.head(shown), "tile", case + ["x:Q", "y:Q"])
+        left = len(selected) - shown
+        if left > 0 and st.button(f"Show more ({left} tile(s) left)"):
+            st.session_state[key] = shown + PAGE
+            st.rerun()
     with slides:
         image_panel("Slide heatmaps", selected, "slide", case, linkable=True,
                     columns=2, size=240)
