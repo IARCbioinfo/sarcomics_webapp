@@ -16,7 +16,7 @@ import pandas as pd
 import streamlit as st
 
 sys.path.insert(0, str(Path(__file__).parent))
-from cryptic import IMG_PATH, cases, community_color, images, z_color  # noqa: E402
+from cryptic import IMG_PATH, cases, community_colors, images, z_color  # noqa: E402
 
 LIST_PAGE = "cryptic_sarcomas.py"
 TILE_COLUMNS = 4  # tiles per community, one row of them each
@@ -39,16 +39,18 @@ def community_percentages(case_id, tiles):
     return pd.Series([100 * w / sum(weights) for w in weights], index=communities), False
 
 
-def plot_communities(percentages):
+def plot_communities(percentages, colors):
     """Composition as bars, colored as the tile borders below them."""
+    order = sorted(percentages.index)
     df = pd.DataFrame({"community": [str(c) for c in percentages.index],
                        "percentage": percentages.values})
     bars = alt.Chart(df, height=alt.Step(24)).mark_bar(cornerRadiusEnd=4).encode(
         alt.X("percentage:Q").title("% of tiles"),
-        alt.Y("community:N").sort("-x").title("community"),
+        # by community, not by size, and as numbers: a nominal sort would put 10 before 2
+        alt.Y("community:N").sort([str(c) for c in order]).title("community"),
         alt.Color("community:N").scale(
-            domain=df.community.tolist(),
-            range=[community_color(c) for c in percentages.index],
+            domain=[str(c) for c in order],
+            range=[colors[c] for c in order],
         ).legend(None),
         tooltip=[alt.Tooltip("community:N"),
                  alt.Tooltip("percentage:Q", format=".1f", title="% of tiles")],
@@ -84,15 +86,16 @@ def representative(case_id, df, community=None):
     return (own.image, True) if not own.empty else (pool.image, False)
 
 
-def show_tiles(case_id, tiles, percentages):
+def show_tiles(case_id, tiles, percentages, colors):
     st.subheader("Representative tiles")
-    for community, percentage in percentages.items():
+    for community in sorted(percentages.index):
+        percentage = percentages[community]
         paths, own = representative(case_id, tiles, community)
         st.markdown(f"**Community {community}** — {percentage:.1f}% of the tiles"
                     + ("" if own else " _(placeholder)_"))
         paths = paths.head(TILE_COLUMNS).tolist()
         if paths:
-            tile_row(paths, community_color(community))
+            tile_row(paths, colors[community])
         else:
             st.info(f"No tile for community {community}.")
 
@@ -135,15 +138,17 @@ def main():
 
     tiles, slides = images("tiles"), images("slides")
     percentages, real = community_percentages(case_id, tiles)
+    # over every community, not only the sample's, or its colors would shift with its content
+    colors = community_colors(tiles.community.unique())
     with st.sidebar:
         st.markdown("**Communities**")
-        st.altair_chart(plot_communities(percentages), width="stretch")
+        st.altair_chart(plot_communities(percentages, colors), width="stretch")
         if not real:
             st.caption("Placeholder composition, seeded by the case id.")
 
     tiles_column, heatmap_column = st.columns(2)
     with tiles_column:
-        show_tiles(case_id, tiles, percentages)
+        show_tiles(case_id, tiles, percentages, colors)
     with heatmap_column:
         show_slide_heatmap(case_id, slides)
 

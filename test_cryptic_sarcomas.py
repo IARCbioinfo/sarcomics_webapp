@@ -10,7 +10,14 @@ import sys
 from streamlit.testing.v1 import AppTest
 
 sys.path.insert(0, "app")
-from cryptic import Z_SCORE, cases, images, z_color  # noqa: E402
+from cryptic import Z_SCORE, cases, community_colors, images, z_color  # noqa: E402
+
+
+def test_community_colors():
+    # tab10 in the order of the communities, as the slide heatmaps were drawn: 1 is blue,
+    # 3 green, 6 purple, 11 gray - checked against the overlays in app/static
+    colors = community_colors(images("tiles").community.unique())
+    assert [colors[c] for c in (1, 3, 6, 11)] == ["#1f77b4", "#2ca02c", "#9467bd", "#7f7f7f"]
 
 
 def test_z_color():
@@ -85,6 +92,7 @@ def test_sample():
 
 
 if __name__ == "__main__":
+    test_community_colors()
     test_z_color()
     test_list()
     test_sample()

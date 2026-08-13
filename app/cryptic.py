@@ -20,9 +20,10 @@ CANCER_TYPES = [
     "Unknown",
 ]
 
-# observable10, the palette the cell proportion bars already use
-PALETTE = ["#4269d0", "#efb118", "#ff725c", "#6cc5b0", "#3ca951", "#ff8ab7",
-           "#a463f2", "#97bbf5", "#9c6b4e", "#9498a0"]
+# matplotlib tab10, taken in order over the communities as they are sorted: that is what the
+# slide heatmaps were drawn with, so community 1 reads blue here as it does over the tissue
+TAB10 = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
+         "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf"]
 
 
 def z_color(z_score):
@@ -32,9 +33,14 @@ def z_color(z_score):
     return "orange" if z_score >= Z_SCORE else "green"
 
 
-def community_color(community):
-    """Same color for a community wherever it is drawn."""
-    return PALETTE[int(community) % len(PALETTE)]
+def community_colors(communities):
+    """Color of every community, keyed by community.
+
+    The whole set has to be passed in, not one community at a time: the heatmaps colored the
+    communities by their rank, so 6 is the fifth color of the palette rather than the sixth.
+    """
+    return {community: TAB10[index % len(TAB10)]
+            for index, community in enumerate(sorted(communities))}
 
 
 Z_SCORE = 2  # a case is a cryptic sarcoma from that z score up
