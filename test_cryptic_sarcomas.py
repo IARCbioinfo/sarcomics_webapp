@@ -23,6 +23,8 @@ def test_list():
     assert not at.exception, [e.value for e in at.exception]
     everything = table(at)
     assert {"Sample", "Cancer type", "Sarcoma score", "Z score"} <= set(everything.columns)
+    # the sample cell is the link its page opens from, not the bare case id
+    assert everything["Sample"].str.startswith("cryptic_sarcoma_sample?case=TCGA-").all()
     # highest z score first, so the interesting samples are on top
     assert everything["Z score"].is_monotonic_decreasing
     # cryptic sarcomas only, the rest of the pancancer cases are not listed
@@ -44,16 +46,20 @@ def test_sample():
     at = AppTest.from_file("app/cryptic_sarcoma_sample.py", default_timeout=300)
     # a cryptic sample holding both a slide heatmap and tiles of its own, no placeholder
     with_images = slides[slides.case_id.isin(tiles.case_id)].case_id
-    at.query_params["case"] = with_images[with_images.isin(cases().case_id)].iloc[0]
+    case = with_images[with_images.isin(cases().case_id)].iloc[0]
+    at.query_params["case"] = case
     at.run()
     assert not at.exception, [e.value for e in at.exception]
     # cancer type, sarcoma score, z score
     assert len(at.metric) == 3, len(at.metric)
     assert at.get("image"), "no slide heatmap"
-    # the community bars, and one tile strip per community of the sample
-    assert at.get("vega_lite_chart"), "no community chart"
-    assert at.get("html"), "no tiles"
-    assert not at.warning, [w.value for w in at.warning]
+    # the composition donut sits in the sidebar, next to nothing else
+    assert at.sidebar.get("vega_lite_chart"), "no community chart"
+    # one row of tiles per community of the sample, and its own tiles, not borrowed ones
+    own = tiles[tiles.case_id == case]
+    rows = at.get("html")
+    assert len(rows) == own.community.nunique(), (len(rows), own.community.nunique())
+    assert all(case in row.body for row in rows), "borrowed tiles for a sample that has its own"
 
     # no sample selected is a message, not a crash
     at.query_params.clear()

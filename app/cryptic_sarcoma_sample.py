@@ -1,6 +1,10 @@
-"""One cryptic sarcoma sample: its slide heatmap, community composition and representative tiles.
+"""One cryptic sarcoma sample: its community composition, representative tiles and slide heatmap.
 
-The sample is read from the `case` query parameter, so a sample page can be linked or reloaded.
+The sample is read from the `case` query parameter, so a sample page can be linked, opened
+in its own tab or reloaded.
+
+The images and the composition are placeholders wherever the sample has none of its own -
+the layout is what this page is for until the per-sample data is generated.
 """
 
 import random
@@ -15,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from cryptic import IMG_PATH, cases, community_color, images  # noqa: E402
 
 LIST_PAGE = "cryptic_sarcomas.py"
-TILES_PER_COMMUNITY = 3
+TILE_COLUMNS = 4  # tiles per community, one row of them each
 
 
 def community_percentages(case_id, tiles):
@@ -36,57 +40,70 @@ def community_percentages(case_id, tiles):
 
 
 def plot_communities(percentages):
+    """Composition as a donut, colored as the tile borders below it."""
     df = pd.DataFrame({"community": [str(c) for c in percentages.index],
                        "percentage": percentages.values})
-    bars = alt.Chart(df, height=alt.Step(24)).mark_bar(cornerRadiusEnd=4).encode(
-        alt.X("percentage:Q").title("% of tiles"),
-        alt.Y("community:N").sort("-x").title("community"),
+    return alt.Chart(df, height=260).mark_arc(innerRadius=50).encode(
+        alt.Theta("percentage:Q").stack(True),
         alt.Color("community:N").scale(
             domain=df.community.tolist(),
             range=[community_color(c) for c in percentages.index],
-        ).legend(None),
+        ).legend(orient="bottom", columns=4, title="community"),
         tooltip=[alt.Tooltip("community:N"),
                  alt.Tooltip("percentage:Q", format=".1f", title="% of tiles")],
     )
-    labels = bars.mark_text(align="left", dx=4, color="gray").encode(
-        text=alt.Text("percentage:Q", format=".1f")
-    )
-    return bars + labels
 
 
-def tile_strip(paths, color, width=180):
-    """A row of tiles bordered in their community color.
+def tile_row(paths, color):
+    """One row of tiles bordered in their community color.
 
     Raw html rather than st.image, which has no border option; the files are reachable
     because static serving is on (see .streamlit/config.toml).
     """
     st.html(
-        '<div style="display:flex;flex-wrap:wrap;gap:8px">'
-        + "".join(f'<img src="{IMG_PATH}/{path}" style="width:{width}px;'
-                  f'border:4px solid {color};border-radius:4px">' for path in paths)
+        f'<div style="display:grid;grid-template-columns:repeat({TILE_COLUMNS},1fr);gap:8px">'
+        + "".join(f'<img src="{IMG_PATH}/{path}" style="width:100%;border:4px solid {color};'
+                  'border-radius:4px;box-sizing:border-box">' for path in paths)
         + "</div>"
     )
 
 
-def representative_tiles(case_id, community, tiles):
-    """Up to 3 tiles of that community, the sample's own if it has any, borrowed otherwise."""
-    own = tiles[(tiles.case_id == case_id) & (tiles.community == community)]
-    if not own.empty:
-        return own.image.head(TILES_PER_COMMUNITY).tolist(), True
-    pool = tiles[tiles.community == community]
-    return pool.image.head(TILES_PER_COMMUNITY).tolist(), False
+def representative(case_id, df, community=None):
+    """Images of the sample, borrowed from the same community when it has none of its own.
+
+    Returns (images, is_real); the borrowed ones keep the page laid out while the per-sample
+    images are missing.
+    """
+    pool = df if community is None else df[df.community == community]
+    own = pool[pool.case_id == case_id]
+    return (own.image, True) if not own.empty else (pool.image, False)
+
+
+def show_tiles(case_id, tiles, percentages):
+    st.subheader("Representative tiles")
+    for community, percentage in percentages.items():
+        paths, own = representative(case_id, tiles, community)
+        st.markdown(f"**Community {community}** — {percentage:.1f}% of the tiles"
+                    + ("" if own else " _(placeholder)_"))
+        paths = paths.head(TILE_COLUMNS).tolist()
+        if paths:
+            tile_row(paths, community_color(community))
+        else:
+            st.info(f"No tile for community {community}.")
 
 
 def show_slide_heatmap(case_id, slides):
     st.subheader("Slide heatmap")
-    own = slides[slides.case_id == case_id]
-    if own.empty:
-        st.info("No slide heatmap for this sample yet.")
+    paths, own = representative(case_id, slides)
+    if paths.empty:
+        st.info("No slide heatmap yet.")
         return
-    row = own.iloc[0]
-    st.image(f"{IMG_PATH}/{row.image}", width="stretch")
-    if isinstance(row.get("viewer_url"), str):
-        st.markdown(f"[Open the slide in the IDC viewer]({row.viewer_url})")
+    st.image(f"{IMG_PATH}/{paths.iloc[0]}", width="stretch",
+             caption=None if own else "Placeholder, this is another sample's heatmap.")
+    if own:
+        url = slides[slides.case_id == case_id].iloc[0].get("viewer_url")
+        if isinstance(url, str):
+            st.markdown(f"[Open the slide in the IDC viewer]({url})")
 
 
 def main():
@@ -108,26 +125,17 @@ def main():
 
     tiles, slides = images("tiles"), images("slides")
     percentages, real = community_percentages(case_id, tiles)
-    if not real:
-        st.warning("Placeholder: this sample has no tiles yet, so the composition below is "
-                   "made up and the tiles are borrowed from other samples of each community.")
-
-    left_column, right_column = st.columns(2)
-    with left_column:
-        show_slide_heatmap(case_id, slides)
-    with right_column:
-        st.subheader("Communities")
+    with st.sidebar:
+        st.markdown("**Communities**")
         st.altair_chart(plot_communities(percentages), width="stretch")
+        if not real:
+            st.caption("Placeholder composition, seeded by the case id.")
 
-    st.subheader("Representative tiles")
-    for community, percentage in percentages.items():
-        paths, own = representative_tiles(case_id, community, tiles)
-        st.markdown(f"**Community {community}** — {percentage:.1f}% of the tiles"
-                    + ("" if own else " _(borrowed)_"))
-        if paths:
-            tile_strip(paths, community_color(community))
-        else:
-            st.info(f"No tile for community {community}.")
+    tiles_column, heatmap_column = st.columns(2)
+    with tiles_column:
+        show_tiles(case_id, tiles, percentages)
+    with heatmap_column:
+        show_slide_heatmap(case_id, slides)
 
 
 main()
