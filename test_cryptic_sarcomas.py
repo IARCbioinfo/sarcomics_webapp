@@ -69,7 +69,8 @@ def test_sample():
     # cancer type and sarcoma score; the z score is html, so it can carry its color
     assert len(at.metric) == 2, len(at.metric)
     z_score = cases().set_index("case_id").z_score[case]
-    assert f"color:{z_color(z_score)}" in at.get("html")[0].body, at.get("html")[0].body
+    z_block = [e for e in at.get("html") if "Z score" in e.body]
+    assert len(z_block) == 1 and f"color:{z_color(z_score)}" in z_block[0].body, z_block
     assert at.get("image"), "no slide heatmap"
     # the composition donut sits in the sidebar, next to nothing else
     assert at.sidebar.get("vega_lite_chart"), "no community chart"

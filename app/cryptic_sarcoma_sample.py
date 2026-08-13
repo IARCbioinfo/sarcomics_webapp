@@ -117,7 +117,9 @@ def show_slide_heatmap(case_id, slides):
 def main():
     case_id = st.query_params.get("case")
     df = cases()
-    if st.button("← Back to the sample list"):
+    # the title shares the row with the button rather than taking one of its own
+    back, heading, _ = st.columns(3, vertical_alignment="center")
+    if back.button("← Back to the sample list"):
         st.query_params.clear()
         st.switch_page(LIST_PAGE)
     if case_id is None or case_id not in set(df.case_id):
@@ -125,7 +127,7 @@ def main():
         return
 
     row = df[df.case_id == case_id].iloc[0]
-    st.title(case_id)
+    heading.html(f'<h1 style="text-align:center;margin:0;padding:0">{case_id}</h1>')
     left, middle, right = st.columns(3)
     left.metric("Cancer type", row.histological_type)
     middle.metric("Sarcoma score", f"{row.sarcoma_score:.3f}")
