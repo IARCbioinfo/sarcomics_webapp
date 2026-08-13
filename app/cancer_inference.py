@@ -10,6 +10,7 @@ import streamlit as st
 # pca_model.pkl/min_max_norm.pkl were pickled with `linear_transformers` as a
 # top-level module; unpickling needs it importable as such regardless of cwd.
 sys.path.insert(0, str(Path(__file__).parent))
+from cryptic import CANCER_TYPES  # noqa: E402
 
 alt.data_transformers.disable_max_rows()
 
@@ -80,12 +81,6 @@ def plot_boxplot(hist_df, new_df):
 
 
 def main():
-    cancer_types = [
-        "GBM", "SKCM", "PAAD", "LGG", "HNSC", "DLBC", "UVM", "READ", "PCPG",
-        "MESO", "COAD", "BRCA", "ESCA", "ACC", "PRAD", "STAD", "LUSC", "LIHC",
-        "THYM", "BLCA", "THCA", "CESC", "LUAD", "CHOL", "TGCT", "KICH", "OV",
-        "KIRP", "Unknown",
-    ]
     st.title("Sarcoma score inference")
     if "submitted" not in st.session_state:
         st.session_state.submitted = False
@@ -108,7 +103,7 @@ def main():
             )
             cancer_type = st.selectbox(
                 "Cancer type",
-                sorted(cancer_types),
+                sorted(CANCER_TYPES),
                 help=(
                     "TCGA study abbreviations, see "
                     "[TCGA study abbreviations](https://gdc.cancer.gov/resources-tcga-users/tcga-code-tables/tcga-study-abbreviations)."
