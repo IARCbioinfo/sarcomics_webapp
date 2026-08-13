@@ -129,6 +129,9 @@ def main():
             hist_df = pd.read_csv(data_dir / "sarcoma_score_inference.tsv", sep="\t").rename(
                 columns={"histological_type": "cancer_type"}
             )
+            # the studies left out of CANCER_TYPES are out of the boxplot and out of the
+            # reference distribution too, not only out of the dropdown
+            hist_df = hist_df[hist_df.cancer_type.isin(CANCER_TYPES)]
             subset = hist_df.loc[hist_df.cancer_type == cancer_type, "sarcoma_score"]
 
             reference = hist_df["sarcoma_score"] if cancer_type == "Unknown" else subset

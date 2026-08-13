@@ -35,8 +35,12 @@ def test_list():
     assert set(filtered["Cancer type"]) == {"BRCA"}
     assert 0 < len(filtered) < len(everything)
 
+    # the studies the project leaves out are not offered at all
+    assert not {"ACC", "MESO", "THYM", "GBM", "LGG", "SKCM", "UVM", "DLBC", "LAML",
+                "PCPG", "TGCT"} & set(at.sidebar.selectbox[0].options)
+
     # a type absent from the data leaves an info box and no table
-    at.sidebar.selectbox[0].set_value("UVM").run()
+    at.sidebar.selectbox[0].set_value("Unknown").run()
     assert not at.dataframe, len(at.dataframe)
     assert at.info
 

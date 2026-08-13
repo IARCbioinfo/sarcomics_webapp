@@ -11,11 +11,13 @@ DATA_PATH = Path(__file__).parent / "data"
 IMG_PATH = "app/static"
 
 # TCGA study abbreviations, https://gdc.cancer.gov/resources-tcga-users/tcga-code-tables/tcga-study-abbreviations
+# ACC, MESO, THYM, GBM, LGG, SKCM, UVM, DLBC, LAML, PCPG and TGCT are left out on purpose:
+# they are the studies the project does not report on, so neither a dropdown nor a chart
+# built from this list shows them.
 CANCER_TYPES = [
-    "GBM", "SKCM", "PAAD", "LGG", "HNSC", "DLBC", "UVM", "READ", "PCPG",
-    "MESO", "COAD", "BRCA", "ESCA", "ACC", "PRAD", "STAD", "LUSC", "LIHC",
-    "THYM", "BLCA", "THCA", "CESC", "LUAD", "CHOL", "TGCT", "KICH", "OV",
-    "KIRP", "Unknown",
+    "PAAD", "HNSC", "READ", "COAD", "BRCA", "ESCA", "PRAD", "STAD", "LUSC",
+    "LIHC", "BLCA", "THCA", "CESC", "LUAD", "CHOL", "KICH", "OV", "KIRP",
+    "Unknown",
 ]
 
 # observable10, the palette the cell proportion bars already use
