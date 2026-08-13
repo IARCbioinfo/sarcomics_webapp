@@ -7,7 +7,7 @@ import pandas as pd
 import streamlit as st
 
 sys.path.insert(0, str(Path(__file__).parent))
-from cryptic import CANCER_TYPES, cases, images  # noqa: E402
+from cryptic import CANCER_TYPES, Z_SCORE, cases, images  # noqa: E402
 
 SAMPLE_PAGE = "cryptic_sarcoma_sample.py"
 
@@ -40,7 +40,8 @@ def main():
         "Details": df.case_id.isin(detailed).values,
     })
 
-    st.caption(f"{len(table)} sample(s), highest z score first. Click a row to open its page.")
+    st.caption(f"{len(table)} sample(s) scoring z ≥ {Z_SCORE}, highest first. "
+               "Click a row to open its page.")
     event = st.dataframe(
         table,
         hide_index=True,

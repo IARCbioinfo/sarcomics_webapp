@@ -10,7 +10,7 @@ import sys
 from streamlit.testing.v1 import AppTest
 
 sys.path.insert(0, "app")
-from cryptic import images  # noqa: E402
+from cryptic import Z_SCORE, cases, images  # noqa: E402
 
 
 def table(at):
@@ -25,6 +25,8 @@ def test_list():
     assert {"Sample", "Cancer type", "Sarcoma score", "Z score"} <= set(everything.columns)
     # highest z score first, so the interesting samples are on top
     assert everything["Z score"].is_monotonic_decreasing
+    # cryptic sarcomas only, the rest of the pancancer cases are not listed
+    assert everything["Z score"].min() >= Z_SCORE, everything["Z score"].min()
 
     at.sidebar.selectbox[0].set_value("BRCA").run()
     filtered = table(at)
@@ -40,8 +42,9 @@ def test_list():
 def test_sample():
     slides, tiles = images("slides"), images("tiles")
     at = AppTest.from_file("app/cryptic_sarcoma_sample.py", default_timeout=300)
-    # a sample holding both a slide heatmap and tiles of its own, so nothing is a placeholder
-    at.query_params["case"] = slides[slides.case_id.isin(tiles.case_id)].case_id.iloc[0]
+    # a cryptic sample holding both a slide heatmap and tiles of its own, no placeholder
+    with_images = slides[slides.case_id.isin(tiles.case_id)].case_id
+    at.query_params["case"] = with_images[with_images.isin(cases().case_id)].iloc[0]
     at.run()
     assert not at.exception, [e.value for e in at.exception]
     # cancer type, sarcoma score, z score
@@ -57,6 +60,11 @@ def test_sample():
     at.run()
     assert not at.exception, [e.value for e in at.exception]
     assert at.error
+
+    # so is a case that exists but is not a cryptic sarcoma
+    at.query_params["case"] = "TCGA-2F-A9KO"
+    at.run()
+    assert at.error, "a case below the z score cut must not have a page"
 
 
 if __name__ == "__main__":

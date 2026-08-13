@@ -28,9 +28,17 @@ def community_color(community):
     return PALETTE[int(community) % len(PALETTE)]
 
 
+Z_SCORE = 2  # a case is a cryptic sarcoma from that z score up
+
+
 def cases():
-    """One row per pancancer case: case_id, wsi_id, histological_type, sarcoma_score, z_score."""
-    return pd.read_csv(DATA_PATH / "cryptic_sarcomas.tsv", sep="\t")
+    """One row per cryptic sarcoma: case_id, wsi_id, histological_type, sarcoma_score, z_score.
+
+    The tsv holds every pancancer case; only those scoring z >= 2 are cryptic sarcomas, and
+    the pages show nothing else, so the cut is made here rather than in each of them.
+    """
+    df = pd.read_csv(DATA_PATH / "cryptic_sarcomas.tsv", sep="\t")
+    return df[df.z_score >= Z_SCORE]
 
 
 def images(kind):
