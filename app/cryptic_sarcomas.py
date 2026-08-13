@@ -7,7 +7,7 @@ import pandas as pd
 import streamlit as st
 
 sys.path.insert(0, str(Path(__file__).parent))
-from cryptic import CANCER_TYPES, Z_SCORE, cases  # noqa: E402
+from cryptic import CANCER_TYPES, Z_SCORE, cases, z_color  # noqa: E402
 
 # relative to the current page, so it survives the app being served under a base path
 SAMPLE_PAGE = "cryptic_sarcoma_sample"
@@ -42,7 +42,8 @@ def main():
     st.caption(f"{len(table)} sample(s) scoring z ≥ {Z_SCORE}, highest first. "
                "Click a sample to open its page in a new tab.")
     st.dataframe(
-        table,
+        # same bands as the sample page, so a row reads like the page it opens
+        table.style.map(lambda z: f"color: {z_color(z)}; font-weight: bold", subset=["Z score"]),
         hide_index=True,
         width="stretch",
         column_config={

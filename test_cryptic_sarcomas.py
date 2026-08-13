@@ -47,6 +47,11 @@ def test_list():
     assert set(filtered["Cancer type"]) == {"BRCA"}
     assert 0 < len(filtered) < len(everything)
 
+    # the z score column carries the same bands as the sample page
+    css = at.dataframe[0].proto.arrow_data.styler.styles
+    assert all(f"color: {z_color(z)}" in css for z in everything["Z score"])
+    assert "color: green" not in css, "nothing under the cut is listed, so nothing is green"
+
     # the studies the project leaves out are not offered at all
     assert not {"ACC", "MESO", "THYM", "GBM", "LGG", "SKCM", "UVM", "DLBC", "LAML",
                 "PCPG", "TGCT"} & set(at.sidebar.selectbox[0].options)

@@ -115,6 +115,8 @@ def show_slide_heatmap(case_id, slides):
 
 
 def main():
+    # the page opens on its header, without the padding streamlit leaves under the toolbar
+    st.html("<style>.stMainBlockContainer {padding-top: 2rem;}</style>")
     case_id = st.query_params.get("case")
     df = cases()
     # the title shares the row with the button rather than taking one of its own
