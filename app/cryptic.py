@@ -25,6 +25,13 @@ PALETTE = ["#4269d0", "#efb118", "#ff725c", "#6cc5b0", "#3ca951", "#ff8ab7",
            "#a463f2", "#97bbf5", "#9c6b4e", "#9498a0"]
 
 
+def z_color(z_score):
+    """How far above the cryptic sarcoma cut a sample scores: green below it, then orange, red."""
+    if z_score >= 3:
+        return "red"
+    return "orange" if z_score >= Z_SCORE else "green"
+
+
 def community_color(community):
     """Same color for a community wherever it is drawn."""
     return PALETTE[int(community) % len(PALETTE)]

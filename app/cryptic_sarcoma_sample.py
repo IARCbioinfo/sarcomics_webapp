@@ -16,7 +16,7 @@ import pandas as pd
 import streamlit as st
 
 sys.path.insert(0, str(Path(__file__).parent))
-from cryptic import IMG_PATH, cases, community_color, images  # noqa: E402
+from cryptic import IMG_PATH, cases, community_color, images, z_color  # noqa: E402
 
 LIST_PAGE = "cryptic_sarcomas.py"
 TILE_COLUMNS = 4  # tiles per community, one row of them each
@@ -121,7 +121,12 @@ def main():
     left, middle, right = st.columns(3)
     left.metric("Cancer type", row.histological_type)
     middle.metric("Sarcoma score", f"{row.sarcoma_score:.3f}")
-    right.metric("Z score", f"{row.z_score:.2f}")
+    # st.metric only ever colors its delta, so the z score is drawn in its shape instead
+    right.html(
+        '<div style="font-size:0.875rem;opacity:0.6">Z score</div>'
+        f'<div style="font-size:2.25rem;font-weight:600;line-height:1.2;'
+        f'color:{z_color(row.z_score)}">{row.z_score:.2f}</div>'
+    )
 
     tiles, slides = images("tiles"), images("slides")
     percentages, real = community_percentages(case_id, tiles)

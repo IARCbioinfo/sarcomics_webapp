@@ -10,7 +10,12 @@ import sys
 from streamlit.testing.v1 import AppTest
 
 sys.path.insert(0, "app")
-from cryptic import Z_SCORE, cases, images  # noqa: E402
+from cryptic import Z_SCORE, cases, images, z_color  # noqa: E402
+
+
+def test_z_color():
+    assert [z_color(z) for z in (1.99, 2, 2.99, 3, 7)] == [
+        "green", "orange", "orange", "red", "red"]
 
 
 def table(at):
@@ -54,14 +59,16 @@ def test_sample():
     at.query_params["case"] = case
     at.run()
     assert not at.exception, [e.value for e in at.exception]
-    # cancer type, sarcoma score, z score
-    assert len(at.metric) == 3, len(at.metric)
+    # cancer type and sarcoma score; the z score is html, so it can carry its color
+    assert len(at.metric) == 2, len(at.metric)
+    z_score = cases().set_index("case_id").z_score[case]
+    assert f"color:{z_color(z_score)}" in at.get("html")[0].body, at.get("html")[0].body
     assert at.get("image"), "no slide heatmap"
     # the composition donut sits in the sidebar, next to nothing else
     assert at.sidebar.get("vega_lite_chart"), "no community chart"
     # one row of tiles per community of the sample, and its own tiles, not borrowed ones
     own = tiles[tiles.case_id == case]
-    rows = at.get("html")
+    rows = [e for e in at.get("html") if "<img" in e.body]
     assert len(rows) == own.community.nunique(), (len(rows), own.community.nunique())
     assert all(case in row.body for row in rows), "borrowed tiles for a sample that has its own"
 
@@ -78,6 +85,7 @@ def test_sample():
 
 
 if __name__ == "__main__":
+    test_z_color()
     test_list()
     test_sample()
     print("OK")
