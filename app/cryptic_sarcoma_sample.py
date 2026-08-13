@@ -40,18 +40,23 @@ def community_percentages(case_id, tiles):
 
 
 def plot_communities(percentages):
-    """Composition as a donut, colored as the tile borders below it."""
+    """Composition as bars, colored as the tile borders below them."""
     df = pd.DataFrame({"community": [str(c) for c in percentages.index],
                        "percentage": percentages.values})
-    return alt.Chart(df, height=260).mark_arc(innerRadius=50).encode(
-        alt.Theta("percentage:Q").stack(True),
+    bars = alt.Chart(df, height=alt.Step(24)).mark_bar(cornerRadiusEnd=4).encode(
+        alt.X("percentage:Q").title("% of tiles"),
+        alt.Y("community:N").sort("-x").title("community"),
         alt.Color("community:N").scale(
             domain=df.community.tolist(),
             range=[community_color(c) for c in percentages.index],
-        ).legend(orient="bottom", columns=4, title="community"),
+        ).legend(None),
         tooltip=[alt.Tooltip("community:N"),
                  alt.Tooltip("percentage:Q", format=".1f", title="% of tiles")],
     )
+    labels = bars.mark_text(align="left", dx=4, color="gray").encode(
+        text=alt.Text("percentage:Q", format=".1f")
+    )
+    return bars + labels
 
 
 def tile_row(paths, color):
