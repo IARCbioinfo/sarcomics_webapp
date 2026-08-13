@@ -7,7 +7,7 @@ import pandas as pd
 import streamlit as st
 
 sys.path.insert(0, str(Path(__file__).parent))
-from cryptic import CANCER_TYPES, Z_SCORE, cases, images  # noqa: E402
+from cryptic import CANCER_TYPES, Z_SCORE, cases  # noqa: E402
 
 SAMPLE_PAGE = "cryptic_sarcoma_sample.py"
 
@@ -30,14 +30,11 @@ def main():
         return
 
     df = df.sort_values("z_score", ascending=False)
-    # the samples the community explorer holds images for; the others only get placeholders
-    detailed = set(images("tiles").case_id)
     table = pd.DataFrame({
         "Sample": df.case_id.values,
         "Cancer type": df.histological_type.values,
         "Sarcoma score": df.sarcoma_score.values,
         "Z score": df.z_score.values,
-        "Details": df.case_id.isin(detailed).values,
     })
 
     st.caption(f"{len(table)} sample(s) scoring z ≥ {Z_SCORE}, highest first. "
@@ -51,7 +48,6 @@ def main():
         column_config={
             "Sarcoma score": st.column_config.NumberColumn(format="%.3f"),
             "Z score": st.column_config.NumberColumn(format="%.2f"),
-            "Details": st.column_config.CheckboxColumn(help="Tiles and slide heatmap available."),
         },
     )
     selected = event.selection["rows"]
