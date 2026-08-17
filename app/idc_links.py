@@ -13,7 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 import pandas as pd
 import requests
 
-SLIDES = "app/data/slides_cryptic_sarcoma.tsv"
+SLIDES = "app/data/slides.tsv"
 DICOMWEB = ("https://proxy.imaging.datacommons.cancer.gov/current"
             "/viewer-only-no-downloads-see-tinyurl-dot-com-slash-3j3d9jyp/dicomWeb")
 SLIM = "https://viewer.imaging.datacommons.cancer.gov/slim/studies"

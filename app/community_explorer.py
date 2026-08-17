@@ -33,38 +33,33 @@ def aspect(path):
         return image.size[0] / image.size[1]
 
 
-def retrieve_data(suffix):
-    """Slides, tiles and sarcoma scores of every community, one row per slide.
+def retrieve_data(kind, suffix):
+    """Slides or tiles of every community with their sarcoma scores, one row per image.
 
-    Not cached: the load is 3 tsvs and 300 PNG headers, and @st.cache_data keys on
-    arguments only, so it kept serving stale rows after the tsvs were regenerated.
+    `kind` is "slides" or "tiles". The two are loaded separately because they are not
+    row aligned: a community holds about 15 slides but 100 tiles.
+
+    Not cached: the load is 2 tsvs, and @st.cache_data keys on arguments only, so it
+    kept serving stale rows after the tsvs were regenerated.
     """
-    slides = pd.read_csv(f"{DATA_PATH}/slides{suffix}.tsv", sep="\t")
-    tiles = pd.read_csv(f"{DATA_PATH}/tiles{suffix}.tsv", sep="\t")
-    df = slides.rename(columns={"image": "slide"})
-    df["tile"] = tiles.image
-    df["case_id"] = [x[:12] for x in df.slide]
-    # tile names are <case_id>_<x>_<y>_community_<n>.png
-    coords = [x.split("_community")[0].split("_")[-2:] for x in df.tile]
-    df[["x", "y"]] = [[int(x), int(y)] for x, y in coords]
-    # viewer_url is resolved offline by app/idc_links.py, absent until that has been run
-    df["viewer_url"] = slides.get("viewer_url")
-    df["tile"] = f"{IMG_PATH}/" + df.tile
-    df["slide"] = f"{IMG_PATH}/" + df.slide
+    # slides carry a viewer_url resolved offline by app/idc_links.py, absent until it is run
+    df = pd.read_csv(f"{DATA_PATH}/{kind}{suffix}.tsv", sep="\t")
+    df["case_id"] = [x[:12] for x in df.image]
+    if kind == "tiles":
+        # tile names are <case_id>..._<x>_<y>_community_<n>.png
+        coords = [x.split("_community")[0].split("_")[-2:] for x in df.image]
+        df[["x", "y"]] = [[int(x), int(y)] for x, y in coords]
+    df["image"] = f"{IMG_PATH}/" + df.image
     # the pancancer cases are absent from the heatmap scores, they carry a z score as well
-    name, columns = (("cryptic_sarcomas", ["sarcoma_score", "z_score"]) if suffix
-                     else ("sarcoma_score_heatmaps", ["sarcoma_score_wsi"]))
-    scores = pd.read_csv(f"{DATA_PATH}/{name}.tsv", sep="\t")
+    score_file, columns = (("cryptic_sarcomas", ["sarcoma_score", "z_score"]) if suffix
+                           else ("sarcoma_score_heatmaps", ["sarcoma_score_wsi"]))
+    scores = pd.read_csv(f"{DATA_PATH}/{score_file}.tsv", sep="\t")
     # inner: cases with no sarcoma score are not shown at all
-    df = df.merge(
+    return df.merge(
         scores[["case_id", "histological_type"] + columns].rename(
             columns={"sarcoma_score_wsi": "sarcoma_score"}),
         on="case_id", how="inner",
     )
-    # slide heatmaps have wildly different shapes (0.68 to 3.53), the layout needs their aspect
-    for column in ("tile", "slide"):
-        df[f"{column}_aspect"] = [aspect(p) for p in df[column]]
-    return df
 
 
 def plot_cell_proportions(percentages, community):
@@ -87,14 +82,15 @@ def plot_cell_proportions(percentages, community):
     return bars + labels
 
 
-def plot_image_grid(df, url, tooltip, href=False, columns=3, size=160, gap=10, max_aspect=1.6):
+def plot_image_grid(df, tooltip, href=False, columns=3, size=160, gap=10, max_aspect=1.6):
     """Images on a pixel grid: fixed column pitch, rows only as tall as their tallest image.
 
     Positions are computed here rather than left to a band scale so the gutters stay even
     whatever shape the images are - slide heatmaps range from portrait to very wide.
     """
     df = df.reset_index(drop=True)
-    aspects = df[f"{url}_aspect"].clip(1 / max_aspect, max_aspect)
+    # only the headers of the images actually shown are read, a full page is a few hundred
+    aspects = pd.Series([aspect(p) for p in df.image]).clip(1 / max_aspect, max_aspect)
     widths = [min(size, size * a) for a in aspects]
     heights = [w / a for w, a in zip(widths, aspects)]
 
@@ -119,7 +115,7 @@ def plot_image_grid(df, url, tooltip, href=False, columns=3, size=160, gap=10, m
         alt.X2("x2:Q"),
         alt.Y("y1:Q").axis(None).title(None).scale(domain=[height, 0], nice=False),
         alt.Y2("y2:Q"),
-        url=f"{url}:N",
+        url="image:N",
         tooltip=tooltip,
     )
     if href:
@@ -145,11 +141,15 @@ EMBED_TEMPLATE = """
 """
 
 
-def image_panel(title, df, url, tooltip, linkable=False, **grid):
+def image_panel(title, df, tooltip, linkable=False, **grid):
     """One image grid. The slides are hyperlinked to their IDC viewer page."""
     st.subheader(title)
+    if df.empty:
+        # an empty grid has a negative height, which renders as a broken empty box
+        st.info(f"No {title.lower()} for this community.")
+        return
     if not linkable:
-        st.altair_chart(plot_image_grid(df, url, tooltip, **grid), width="content")
+        st.altair_chart(plot_image_grid(df, tooltip, **grid), width="content")
         return
 
     linked = df.dropna(subset=["viewer_url"])
@@ -158,13 +158,12 @@ def image_panel(title, df, url, tooltip, linkable=False, **grid):
         st.caption(f"{missing} slide(s) without an IDC link, those are not clickable "
                    "(run `python -m app.idc_links` to resolve them).")
     if linked.empty:
-        # an empty grid has a negative height, which renders as a broken empty box
-        st.altair_chart(plot_image_grid(df, url, tooltip, **grid), width="content")
+        st.altair_chart(plot_image_grid(df, tooltip, **grid), width="content")
         return
 
-    chart = plot_image_grid(linked, url, tooltip, href=True, **grid)
+    chart = plot_image_grid(linked, tooltip, href=True, **grid)
     fallback = "".join(
-        f'<a href="{row.viewer_url}" target="_blank"><img src="{getattr(row, url)}" width="120"></a>'
+        f'<a href="{row.viewer_url}" target="_blank"><img src="{row.image}" width="120"></a>'
         for row in linked.itertuples()
     )
     # st.iframe, not components.v1.html: same srcdoc iframe and same sandbox (allow-popups,
@@ -184,10 +183,10 @@ def image_panel(title, df, url, tooltip, linkable=False, **grid):
 def main():
     pancancer = st.sidebar.checkbox("Use pancancer data", value=True)
     suffix = "_cryptic_sarcoma" if pancancer else ""
-    df = retrieve_data(suffix)
-    communities = sorted(df.community.unique())
+    slides = retrieve_data("slides", suffix)
+    tiles = retrieve_data("tiles", suffix)
+    communities = sorted(set(slides.community) | set(tiles.community))
     community = st.sidebar.selectbox("Community", communities)
-    selected = df[df.community == community]
 
     with st.sidebar:
         for title, (name, description) in ANNOTATIONS.items():
@@ -203,20 +202,22 @@ def main():
         alt.Tooltip("histological_type:N", title="histological type"),
         alt.Tooltip("sarcoma_score:Q", title="sarcoma score", format=".2f"),
     ]
-    if "z_score" in selected:
+    if "z_score" in tiles:
         case.append(alt.Tooltip("z_score:Q", title="z score", format=".2f"))
-    tiles, slides = st.columns(2)
-    with tiles:
+    selected_tiles = tiles[tiles.community == community]
+    selected_slides = slides[slides.community == community]
+    left_column, right_column = st.columns(2)
+    with left_column:
         # keyed per community so switching community starts from 20 again
         key = f"tiles_shown_{suffix}_{community}"
         shown = st.session_state.get(key, PAGE)
-        image_panel("Tiles", selected.head(shown), "tile", case + ["x:Q", "y:Q"])
-        left = len(selected) - shown
+        image_panel("Tiles", selected_tiles.head(shown), case + ["x:Q", "y:Q"])
+        left = len(selected_tiles) - shown
         if left > 0 and st.button(f"Show more ({left} tile(s) left)"):
             st.session_state[key] = shown + PAGE
             st.rerun()
-    with slides:
-        image_panel("Slide heatmaps", selected, "slide", case, linkable=True,
+    with right_column:
+        image_panel("Slide heatmaps", selected_slides, case, linkable=True,
                     columns=2, size=240)
 
 
