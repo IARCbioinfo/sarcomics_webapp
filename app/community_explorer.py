@@ -21,11 +21,15 @@ ANNOTATIONS = {
 PAGE = 20  # tiles per "show more" click
 
 
-def cell_percentages_per_community(name, suffix):
-    """Cell type percentages of each leiden community, one row per community.
+SUBTYPES = ("Cancer subtypes",
+            "Share of each community held by the cohorts, over every slide of the study and not only "
+            "the ones shown here: a slide weighs as much as the percentage of the community it holds.")
+
+
+def percentages_per_community(name):
+    """Percentages of each leiden community, one row per community and one column per category.
     """
-    path = f"{DATA_PATH}/leiden_communities_annotations_percentage_{name}{suffix}.tsv"
-    return pd.read_csv(path, sep="\t").set_index("Community")
+    return pd.read_csv(f"{DATA_PATH}/{name}.tsv", sep="\t").set_index("Community")
 
 
 def aspect(path):
@@ -67,17 +71,15 @@ def retrieve_data(suffix):
     return df
 
 
-def plot_cell_proportions(percentages, community):
-    if community not in percentages.index:
-        return None
-    row = percentages.loc[community]
-    df = pd.DataFrame({"cell_type": percentages.columns, "proportion": row.values / 100})
+def plot_proportions(row, label):
+    """Horizontal bars of one community's percentages, `label` naming what they are shares of."""
+    df = pd.DataFrame({"name": row.index, "proportion": row.values / 100})
     bars = alt.Chart(df, height=alt.Step(24)).mark_bar(
         cornerRadiusEnd=4, color="#4269d0"
     ).encode(
         alt.X("proportion:Q").axis(format="%").title(None),
-        alt.Y("cell_type:N").sort("-x").title(None),
-        tooltip=[alt.Tooltip("cell_type:N", title="cell type"),
+        alt.Y("name:N").sort("-x").title(None),
+        tooltip=[alt.Tooltip("name:N", title=label),
                  alt.Tooltip("proportion:Q", format=".1%")],
     )
     labels = bars.mark_text(align="left", dx=4, color="gray").encode(
@@ -85,6 +87,16 @@ def plot_cell_proportions(percentages, community):
     )
     # titled by the caller instead, so the name can carry a tooltip
     return bars + labels
+
+
+def proportions_panel(title, file, community, label, description):
+    """One titled sidebar barplot, or a notice when the community is absent from `file`."""
+    st.markdown(f"**{title}** — community {community}", help=description)
+    percentages = percentages_per_community(file)
+    if community not in percentages.index:
+        st.info(f"No {title.lower()} for community {community}.")
+    else:
+        st.altair_chart(plot_proportions(percentages.loc[community], label), width="stretch")
 
 
 def plot_image_grid(df, url, tooltip, href=False, columns=3, size=160, gap=10, max_aspect=1.6):
@@ -190,13 +202,12 @@ def main():
     selected = df[df.community == community]
 
     with st.sidebar:
+        title, description = SUBTYPES
+        proportions_panel(title, f"leiden_communities_subtypes_percentage{suffix}", community,
+                          "subtype", description)
         for title, (name, description) in ANNOTATIONS.items():
-            st.markdown(f"**{title}** — community {community}", help=description)
-            chart = plot_cell_proportions(cell_percentages_per_community(name, suffix), community)
-            if chart is None:
-                st.info(f"No {title} annotation for community {community}.")
-            else:
-                st.altair_chart(chart, width="stretch")
+            proportions_panel(title, f"leiden_communities_annotations_percentage_{name}{suffix}",
+                              community, "cell type", description)
 
     case = [
         alt.Tooltip("case_id:N", title="case"),
