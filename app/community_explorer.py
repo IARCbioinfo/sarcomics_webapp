@@ -12,8 +12,10 @@ from vega import embed  # noqa: E402
 
 DATA_PATH = "app/data"
 IMG_PATH = "app/static"
-# the two pipeline runs, each with its own data and static subfolder
-TRAINING, CRYPTIC = "5", "5_cryptic_sarcoma"
+# pipeline run to show; its tsvs and images sit in a subfolder of that name.
+# temporarily the only run kept, to cut deployed image count - restore the
+# "5" (non-cryptic) run and its sidebar checkbox to bring the other back.
+CRYPTIC = "5_cryptic_sarcoma"
 TAXONOMY = "https://tio-ikim.github.io/CellViT-Inference/examples.html"
 # name -> file slug, tooltip; the cell types themselves come from the CellViT taxonomies
 ANNOTATIONS = {
@@ -183,8 +185,7 @@ def requested_community(communities):
 
 
 def main():
-    pancancer = st.sidebar.checkbox("Use pancancer data", value=True)
-    run = CRYPTIC if pancancer else TRAINING
+    run = CRYPTIC
     slides = retrieve_data("slides", run)
     tiles = retrieve_data("tiles", run)
     communities = sorted(set(slides.community) | set(tiles.community))
