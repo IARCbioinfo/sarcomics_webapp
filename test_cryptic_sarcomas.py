@@ -5,18 +5,20 @@ scriptable), so the sample page is driven through the `case` query parameter it 
 
 Run it from the repo root: python test_cryptic_sarcomas.py
 """
+import re
 import sys
 
 from streamlit.testing.v1 import AppTest
 
 sys.path.insert(0, "app")
-from cryptic import Z_SCORE, cases, community_colors, images, z_color  # noqa: E402
+from cryptic import (Z_SCORE, cases, community_colors, compositions,  # noqa: E402
+                     sample_slides, sample_tiles, z_color)
 
 
 def test_community_colors():
     # tab10 in the order of the communities, as the slide heatmaps were drawn: 1 is blue,
     # 3 green, 6 purple, 11 gray - checked against the overlays in app/static
-    colors = community_colors(images("tiles").community.unique())
+    colors = community_colors(sample_tiles().community.unique())
     assert [colors[c] for c in (1, 3, 6, 11)] == ["#1f77b4", "#2ca02c", "#9467bd", "#7f7f7f"]
 
 
@@ -62,10 +64,18 @@ def test_list():
     assert at.info
 
 
+def composition(at):
+    """The sidebar composition bars, as {community: (percentage, url)}, read from their html."""
+    html = "".join(e.body for e in at.sidebar if getattr(e, "type", "") == "html")
+    bars = re.findall(r'href="([^"]*community=(\d+))"[^>]*?: ([\d.]+)% of', html)
+    return {int(community): (float(percentage), url)
+            for url, community, percentage in bars}
+
+
 def test_sample():
-    slides, tiles = images("slides"), images("tiles")
+    slides, tiles = sample_slides(), sample_tiles()
     at = AppTest.from_file("app/cryptic_sarcoma_sample.py", default_timeout=300)
-    # a cryptic sample holding both a slide heatmap and tiles of its own, no placeholder
+    # a cryptic sample holding both a slide heatmap and tiles of its own
     with_images = slides[slides.case_id.isin(tiles.case_id)].case_id
     case = with_images[with_images.isin(cases().case_id)].iloc[0]
     at.query_params["case"] = case
@@ -77,13 +87,29 @@ def test_sample():
     z_block = [e for e in at.get("html") if "Z score" in e.body]
     assert len(z_block) == 1 and f"color:{z_color(z_score)}" in z_block[0].body, z_block
     assert at.get("image"), "no slide heatmap"
-    # the composition donut sits in the sidebar, next to nothing else
-    assert at.sidebar.get("vega_lite_chart"), "no community chart"
     # one row of tiles per community of the sample, and its own tiles, not borrowed ones
     own = tiles[tiles.case_id == case]
     rows = [e for e in at.get("html") if "<img" in e.body]
     assert len(rows) == own.community.nunique(), (len(rows), own.community.nunique())
     assert all(case in row.body for row in rows), "borrowed tiles for a sample that has its own"
+    # the bars are the sample's own embeddings row, not a spread made up from its case id
+    bars = composition(at)
+    row = compositions().loc[cases().set_index("case_id").wsi_id[case]]
+    assert bars, "no community bars"
+    # every community links to its explorer page, bars and tile headings alike
+    headings = "".join(e.body for e in at.get("html"))
+    for community, (percentage, url) in bars.items():
+        assert abs(percentage - row[str(community)]) < 0.05, (community, percentage)
+        assert url == f"community_explorer?community={community}", url
+        assert f'href="{url}" target="_blank"' in headings, (community, url)
+
+    # a listed sample with no data of its own says so rather than borrowing another's
+    without = sorted(set(cases().case_id) - set(tiles.case_id))
+    assert without, "every sample has tiles, the empty case is no longer covered"
+    at.query_params["case"] = without[0]
+    at.run()
+    assert not at.exception, [e.value for e in at.exception]
+    assert len(at.info) == 3, [i.value for i in at.info]
 
     # no sample selected is a message, not a crash
     at.query_params.clear()

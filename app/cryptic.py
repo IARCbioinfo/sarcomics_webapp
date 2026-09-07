@@ -7,8 +7,9 @@ from pathlib import Path
 
 import pandas as pd
 
-DATA_PATH = Path(__file__).parent / "data"
-IMG_PATH = "app/static"
+RUN = "5_cryptic_sarcoma"  # the pipeline run these pages read, data and images alike
+DATA_PATH = Path(__file__).parent / "data" / RUN
+IMG_PATH = f"app/static/{RUN}"
 
 # TCGA study abbreviations, https://gdc.cancer.gov/resources-tcga-users/tcga-code-tables/tcga-study-abbreviations
 # ACC, MESO, THYM, GBM, LGG, SKCM, UVM, DLBC, LAML, PCPG and TGCT are left out on purpose:
@@ -56,12 +57,32 @@ def cases():
     return df[df.z_score >= Z_SCORE]
 
 
-def images(kind):
-    """Tiles or slide heatmaps of every community, one row per image, with their case id.
+def sample_tiles():
+    """Representative tiles of every cryptic sarcoma, one row per tile.
 
-    `kind` is "tiles" or "slides". Not cached, as in the community explorer: @st.cache_data
-    keys on arguments only and kept serving stale rows after the tsvs were regenerated.
+    Per sample, unlike the community-level `tiles.tsv` the explorer reads: about 25 tiles a
+    slide, each already labelled with the community it was drawn from.
+
+    Not cached, as in the community explorer: @st.cache_data keys on arguments only and kept
+    serving stale rows after the tsvs were regenerated.
     """
-    df = pd.read_csv(DATA_PATH / f"{kind}_cryptic_sarcoma.tsv", sep="\t")
-    df["case_id"] = [x[:12] for x in df.image]
+    df = pd.read_csv(DATA_PATH / "cryptic_sarcomas_tiles.tsv", sep="\t")
+    df["image"] = f"{IMG_PATH}/cryptic_tiles/" + df.tile
     return df
+
+
+def sample_slides():
+    """Slide heatmap of every cryptic sarcoma, one row per slide, `viewer_url` from idc_links."""
+    df = pd.read_csv(DATA_PATH / "cryptic_sarcoma_slides.tsv", sep="\t")
+    df["image"] = f"{IMG_PATH}/thumbnails/" + df.heatmap
+    return df
+
+
+def compositions():
+    """Percentage of each leiden community over a slide's tiles, indexed by wsi_id.
+
+    Holds every leiden label, the noise (-1) and the communities that were not kept for the
+    heatmaps included, so a row sums to 100 while the communities shown sum to less.
+    """
+    return pd.read_csv(DATA_PATH / "cryptic_sarcomas_leiden_embeddings.tsv",
+                       sep="\t").set_index("wsi_id")

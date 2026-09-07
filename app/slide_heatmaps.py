@@ -43,7 +43,7 @@ def main():
         "<style>#vg-tooltip-element img {max-width: min(350px, 40vw); max-height: min(250px, 40vh);}</style>",
         unsafe_allow_html=True,
     )
-    df = retrieve_data("app/data", "app/static")
+    df = retrieve_data("app/data/5", "app/static/5/thumbnails")
     # No use_container_width: stretching to container width forces Vega to
     # refit the concatenated chart and clips the legend's right-oriented axis labels.
     st.altair_chart(plot_slide_heatmap(df))

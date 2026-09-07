@@ -1,6 +1,6 @@
 """Fill the `viewer_url` column of a slides tsv with IDC slim viewer links.
 
-Run it once after regenerating one:  python -m app.idc_links [app/data/slides.tsv]
+Run it once after regenerating one:  python -m app.idc_links [app/data/5/slides.tsv]
 
 A QIDO round trip is about a second per slide, far too slow to do while a community is
 being displayed, so the links are resolved here and read straight out of the tsv by the
@@ -13,7 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 import pandas as pd
 import requests
 
-SLIDES = "app/data/slides.tsv"
+SLIDES = "app/data/5/slides.tsv"
 DICOMWEB = ("https://proxy.imaging.datacommons.cancer.gov/current"
             "/viewer-only-no-downloads-see-tinyurl-dot-com-slash-3j3d9jyp/dicomWeb")
 SLIM = "https://viewer.imaging.datacommons.cancer.gov/slim/studies"
@@ -53,10 +53,12 @@ def idc_viewer_url(slide_barcode):
 
 def main(path=SLIDES):
     slides = pd.read_csv(path, sep="\t")
-    barcodes = sorted({barcode(image) for image in slides.image})
+    # the per-sample tsv names its slides in a wsi_id column, the community ones in image
+    names = slides.wsi_id if "wsi_id" in slides else slides.image
+    barcodes = sorted({barcode(name) for name in names})
     with ThreadPoolExecutor(max_workers=8) as pool:
         urls = dict(zip(barcodes, pool.map(idc_viewer_url, barcodes)))
-    slides["viewer_url"] = [urls[barcode(image)] for image in slides.image]
+    slides["viewer_url"] = [urls[barcode(name)] for name in names]
     slides.to_csv(path, sep="\t", index=False)
     resolved = sum(url is not None for url in urls.values())
     print(f"{resolved}/{len(barcodes)} slides resolved, written to {path}")
