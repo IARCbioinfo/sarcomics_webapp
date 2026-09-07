@@ -20,7 +20,7 @@ from cryptic import (cases, community_colors, compositions, sample_slides,  # no
 LIST_PAGE = "cryptic_sarcomas.py"
 # relative to the current page, as the list page links to this one
 EXPLORER_PAGE = "community_explorer"
-TILE_COLUMNS = 4  # tiles per community, one row of them each
+TILE_COLUMNS = 3  # tiles per community, one row of them each
 
 
 def explorer_url(community):
