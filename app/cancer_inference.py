@@ -14,6 +14,9 @@ from cryptic import CANCER_TYPES  # noqa: E402
 
 alt.data_transformers.disable_max_rows()
 
+# a KICH slide embedding, prefilled so the form can be submitted without an upload to try
+EXAMPLE_H5 = Path(__file__).parent / "static" / "TCGA-KO-8404-01Z-00-DX1.0285FDDF-1C75-4DF3-BD59-285870B73B88.h5"
+
 
 def load_pickle(path):
     with open(path, "rb") as f:
@@ -87,7 +90,7 @@ def main():
 
     with st.expander("Input", expanded=not st.session_state.submitted):
         with st.form("inference_form"):
-            h5_files = st.file_uploader(
+            uploaded = st.file_uploader(
                 "Upload h5 file(s)",
                 type="h5",
                 accept_multiple_files=True,
@@ -101,65 +104,64 @@ def main():
                     "`results/slide_features_titan/<slide_id>.h5`."
                 ),
             )
+            if not uploaded:
+                st.caption("Submitting without any h5 file will use TCGA-KO-8404 from "
+                           "TCGA-KICH as an example")
             cancer_type = st.selectbox(
                 "Cancer type",
                 sorted(CANCER_TYPES),
+                index=sorted(CANCER_TYPES).index("KICH"),
                 help=(
                     "TCGA study abbreviations, see "
                     "[TCGA study abbreviations](https://gdc.cancer.gov/resources-tcga-users/tcga-code-tables/tcga-study-abbreviations)."
                 ),
             )
             submitted = st.form_submit_button("Submit")
+    h5_files = uploaded or [EXAMPLE_H5]
 
     if submitted:
-        if not h5_files:
-            st.error("Upload at least one h5 file.")
-        else:
-            st.session_state.submitted = True
-            st.rerun()
+        st.session_state.submitted = True
+        st.rerun()
 
     if st.session_state.submitted:
-        if not h5_files:
-            st.session_state.submitted = False
-        else:
-            df = compute_sarcoma_scores(h5_files)
-            df["cancer_type"] = cancer_type
+        df = compute_sarcoma_scores(h5_files)
+        df["cancer_type"] = cancer_type
 
-            data_dir = Path(__file__).parent / "data"
-            hist_df = pd.read_csv(data_dir / "sarcoma_score_inference.tsv", sep="\t").rename(
-                columns={"histological_type": "cancer_type"}
-            )
-            # the studies left out of CANCER_TYPES are out of the boxplot and out of the
-            # reference distribution too, not only out of the dropdown
-            hist_df = hist_df[hist_df.cancer_type.isin(CANCER_TYPES)]
-            subset = hist_df.loc[hist_df.cancer_type == cancer_type, "sarcoma_score"]
+        data_dir = Path(__file__).parent / "data"
+        hist_df = pd.read_csv(data_dir / "sarcoma_score_inference.tsv", sep="\t").rename(
+            columns={"histological_type": "cancer_type"}
+        )
+        # the studies left out of CANCER_TYPES are out of the boxplot and out of the
+        # reference distribution too, not only out of the dropdown
+        hist_df = hist_df[hist_df.cancer_type.isin(CANCER_TYPES)]
+        subset = hist_df.loc[hist_df.cancer_type == cancer_type, "sarcoma_score"]
 
-            reference = hist_df["sarcoma_score"] if cancer_type == "Unknown" else subset
-            df["empirical_percentile_rank"] = df["sarcoma_score"].apply(
-                lambda score: ((reference >= score).sum() - 0.5 * (reference == score).sum()) / len(reference)
-            )
+        reference = hist_df["sarcoma_score"] if cancer_type == "Unknown" else subset
+        df["empirical_percentile_rank"] = df["sarcoma_score"].apply(
+            lambda score: ((reference >= score).sum() - 0.5 * (reference == score).sum()) / len(reference)
+        )
 
-            styled = (
-                df.rename(
-                    columns={
-                        "case_id": "Case ID",
-                        "sarcoma_score": "Sarcoma Score",
-                        "cancer_type": "Cancer Type",
-                        "empirical_percentile_rank": "Empirical percentile rank",
-                    }
-                )
-                .style.apply(
-                    lambda row: [
-                        f"color: {score_color(row['Empirical percentile rank'])}; font-weight: bold"
-                        if col in ("Sarcoma Score", "Empirical percentile rank")
-                        else ""
-                        for col in row.index
-                    ],
-                    axis=1,
-                )
+        styled = (
+            df.rename(
+                columns={
+                    "case_id": "Case ID",
+                    "sarcoma_score": "Sarcoma Score",
+                    "cancer_type": "Cancer Type",
+                    "empirical_percentile_rank": "Empirical percentile rank",
+                }
             )
-            st.dataframe(styled, hide_index=True)
-            if cancer_type != "Unknown":
-                st.altair_chart(plot_boxplot(hist_df, df), use_container_width=True)
+            .style.apply(
+                lambda row: [
+                    f"color: {score_color(row['Empirical percentile rank'])}; font-weight: bold"
+                    if col in ("Sarcoma Score", "Empirical percentile rank")
+                    else ""
+                    for col in row.index
+                ],
+                axis=1,
+            )
+        )
+        st.dataframe(styled, hide_index=True)
+        if cancer_type != "Unknown":
+            st.altair_chart(plot_boxplot(hist_df, df), use_container_width=True)
 
 main()
