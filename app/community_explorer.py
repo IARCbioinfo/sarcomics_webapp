@@ -28,7 +28,7 @@ ANNOTATIONS = {
               "from TCGA breast cancer images, classified as tumor, stromal, sTIL or other. "
               f"[CellViT taxonomy]({TAXONOMY}#nucls-classification)"),
 }
-PAGE = 20  # tiles per "show more" click
+PAGE = 9  # tiles kept per community, only that many are shipped in app/static
 
 
 SUBTYPES = ("Cancer types",
@@ -211,14 +211,7 @@ def main():
     selected_slides = slides[slides.community == community]
     left_column, right_column = st.columns(2)
     with left_column:
-        # keyed per community so switching community starts from 20 again
-        key = f"tiles_shown_{run}_{community}"
-        shown = st.session_state.get(key, PAGE)
-        image_panel("Tiles", selected_tiles.head(shown), case + ["x:Q", "y:Q"])
-        left = len(selected_tiles) - shown
-        if left > 0 and st.button(f"Show more ({left} tile(s) left)"):
-            st.session_state[key] = shown + PAGE
-            st.rerun()
+        image_panel("Tiles", selected_tiles.head(PAGE), case + ["x:Q", "y:Q"])
     with right_column:
         image_panel("Slide heatmaps", selected_slides, case, linkable=True,
                     columns=2, size=240)
