@@ -16,10 +16,11 @@ from cryptic import (Z_SCORE, cases, community_colors, compositions,  # noqa: E4
 
 
 def test_community_colors():
-    # tab10 in the order of the communities, as the slide heatmaps were drawn: 1 is blue,
-    # 3 green, 6 purple, 11 gray - checked against the overlays in app/static
+    # tab20 indexed by community number, as the slide heatmaps are drawn: a community keeps its
+    # colour whatever the other communities shown with it
     colors = community_colors(sample_tiles().community.unique())
-    assert [colors[c] for c in (1, 3, 6, 11)] == ["#1f77b4", "#2ca02c", "#9467bd", "#7f7f7f"]
+    assert all(colors[c] == community_colors([c])[c] for c in colors)
+    assert [community_colors([0, 5, 12])[c] for c in (0, 5, 12)] == ["#1f77b4", "#98df8a", "#e377c2"]
 
 
 def test_z_color():

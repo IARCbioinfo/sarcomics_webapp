@@ -21,10 +21,11 @@ CANCER_TYPES = [
     "Unknown",
 ]
 
-# matplotlib tab10, taken in order over the communities as they are sorted: that is what the
-# slide heatmaps were drawn with, so community 1 reads blue here as it does over the tissue
-TAB10 = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
-         "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf"]
+# matplotlib tab20, indexed by community number as the slide heatmaps are drawn (explainable_WSI
+# 695c893), so a community has the same colour here, over the tissue and in every figure
+TAB20 = ["#1f77b4", "#aec7e8", "#ff7f0e", "#ffbb78", "#2ca02c", "#98df8a", "#d62728", "#ff9896",
+         "#9467bd", "#c5b0d5", "#8c564b", "#c49c94", "#e377c2", "#f7b6d2", "#7f7f7f", "#c7c7c7",
+         "#bcbd22", "#dbdb8d", "#17becf", "#9edae5"]
 
 
 def z_color(z_score):
@@ -35,13 +36,8 @@ def z_color(z_score):
 
 
 def community_colors(communities):
-    """Color of every community, keyed by community.
-
-    The whole set has to be passed in, not one community at a time: the heatmaps colored the
-    communities by their rank, so 6 is the fifth color of the palette rather than the sixth.
-    """
-    return {community: TAB10[index % len(TAB10)]
-            for index, community in enumerate(sorted(communities))}
+    """Color of every community, keyed by community: the community number indexes the palette."""
+    return {community: TAB20[int(community) % len(TAB20)] for community in communities}
 
 
 Z_SCORE = 2  # a case is a cryptic sarcoma from that z score up
