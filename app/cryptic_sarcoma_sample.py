@@ -15,8 +15,8 @@ import pandas as pd
 import streamlit as st
 
 sys.path.insert(0, str(Path(__file__).parent))
-from cryptic import (cases, community_colors, compositions, sample_slides,  # noqa: E402
-                     sample_tiles, z_color)
+from cryptic import (TYPE_COLORS, cases, community_colors, community_title,  # noqa: E402
+                     community_types, compositions, sample_slides, sample_tiles, z_color)
 LIST_PAGE = "cryptic_sarcomas.py"
 # relative to the current page, as the list page links to this one
 EXPLORER_PAGE = "community_explorer"
@@ -78,8 +78,8 @@ def tile_row(paths, color):
     )
 
 
-def show_tiles(own, percentages, colors):
-    """The sample's own tiles, one row per community it has any in."""
+def show_tiles(own, percentages, colors, types):
+    """The sample's own tiles, one row per community it has any in, titled with its type."""
     st.subheader("Representative tiles")
     if own.empty:
         st.info("No tile for this sample.")
@@ -92,21 +92,34 @@ def show_tiles(own, percentages, colors):
         else:
             share = f" — {percentages[community]:.1f}% of the tiles"
         st.html(f'<strong><a href="{explorer_url(community)}" target="_blank">'
-                f'Community {community}</a></strong>{share}')
+                f'{community_title(community, types)}</a></strong>{share}')
         tile_row(tiles.image.head(TILE_COLUMNS).tolist(), colors[community])
 
 
-def show_slide_heatmap(case_id, slides):
-    st.subheader("Slide heatmap")
-    own = slides[slides.case_id == case_id]
-    if own.empty:
-        st.info("No slide heatmap for this sample.")
-        return
-    slide = own.iloc[0]
-    img = f'<img src="{slide.image}" style="width:100%">'
+def heatmap(slide, path):
+    """One slide heatmap, linked to the slide's IDC viewer page when it has one."""
+    img = f'<img src="{path}" style="width:100%">'
     if isinstance(slide.get("viewer_url"), str):
         img = f'<a href="{slide.viewer_url}" target="_blank">{img}</a>'
     st.html(img)
+
+
+def show_slide_heatmap(case_id, slides):
+    """The slide coloured by community type, then by community."""
+    own = slides[slides.case_id == case_id]
+    if own.empty:
+        st.subheader("Slide heatmap")
+        st.info("No slide heatmap for this sample.")
+        return
+    slide = own.iloc[0]
+    st.subheader("Community types")
+    if isinstance(slide.type_image, str):
+        st.caption(f"Tiles coloured by the type of their community: {TYPE_COLORS}.")
+        heatmap(slide, slide.type_image)
+    else:
+        st.info("No community-type heatmap for this sample.")
+    st.subheader("Communities")
+    heatmap(slide, slide.image)
 
 
 def main():
@@ -152,7 +165,7 @@ def main():
 
     tiles_column, heatmap_column = st.columns(2)
     with tiles_column:
-        show_tiles(tiles[tiles.case_id == case_id], percentages, colors)
+        show_tiles(tiles[tiles.case_id == case_id], percentages, colors, community_types())
     with heatmap_column:
         show_slide_heatmap(case_id, slides)
 

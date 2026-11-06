@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pandas as pd
 
-RUN = "5_cryptic_sarcoma"  # the pipeline run these pages read, data and images alike
+RUN = "5_training_communities_pancancer_slides"  # the score-building communities on every pancancer slide
 DATA_PATH = Path(__file__).parent / "data" / RUN
 IMG_PATH = f"app/static/{RUN}"
 
@@ -68,10 +68,32 @@ def sample_tiles():
 
 
 def sample_slides():
-    """Slide heatmap of every cryptic sarcoma, one row per slide, `viewer_url` from idc_links."""
+    """Slide heatmaps of every cryptic sarcoma, one row per slide, `viewer_url` from idc_links.
+
+    `image` colours the tiles by community, `type_image` by community type (empty until
+    explainable_WSI stage 17c has run).
+    """
     df = pd.read_csv(DATA_PATH / "cryptic_sarcoma_slides.tsv", sep="\t")
     df["image"] = f"{IMG_PATH}/thumbnails/" + df.heatmap
+    df["type_image"] = f"{IMG_PATH}/type_thumbnails/" + df.type_heatmap if "type_heatmap" in df else None
     return df
+
+
+def community_types():
+    """{community: type} - foci, stroma or territories - empty when the pipeline wrote none."""
+    path = DATA_PATH / "community_types.tsv"
+    if not path.exists():
+        return {}
+    df = pd.read_csv(path, sep="\t")
+    return dict(zip(df.community, df.type))
+
+
+def community_title(community, types):
+    """"Community 3 (stroma)", or "Community 3" when it has no type."""
+    return f"Community {community}" + (f" ({types[community]})" if community in types else "")
+
+
+TYPE_COLORS = "foci in red, stroma in green, territories in grey"
 
 
 def compositions():
