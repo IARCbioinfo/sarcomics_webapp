@@ -1,6 +1,6 @@
 """Copy the pipeline's webapp outputs for the score-building communities into app/data and app/static.
 
-Run it after the explainable_WSI stages 17a, 17c, 21a, 21c and 17d, then resolve the IDC links:
+Run it after the explainable_WSI stages 17a, 17c, 21a, 21c, 17d and, for the explorer sidebar, 21d and 22c, then resolve the IDC links:
     python -m app.update_data <titan_20.0x folder>
     python -m app.idc_links app/data/5_training_communities_pancancer_slides/cryptic_sarcoma_slides.tsv
     python -m app.idc_links app/data/5_training_communities_pancancer_slides/explorer_slides.tsv
@@ -125,6 +125,18 @@ def main():
     explorer_tiles = explorer_tiles[explorer_tiles.community.isin(keep)]
     copy_images(explorer_tiles.image, webapp / "explorer_tiles", static / "explorer_tiles", TILE_SIDE)
     write(explorer_tiles.assign(image=explorer_tiles.image.map(jpg)), "explorer_tiles.tsv", data)
+
+    # community explorer sidebar: cell types (22c) and cancer types (21d), each skipped until its stage has run
+    sidebar = {"leiden_communities_annotations_percentage_consep.tsv":
+               clipsum / RUN / "cellvit" / "leiden_communities_annotations_percentage.tsv",
+               "leiden_communities_annotations_percentage_nucls.tsv":
+               clipsum / RUN / "cellvit_nucls" / "leiden_communities_annotations_percentage.tsv",
+               "leiden_communities_subtypes_percentage.tsv": webapp / "leiden_communities_subtypes_percentage.tsv"}
+    for name, source in sidebar.items():
+        if source.exists():
+            shutil.copy(source, data / name)
+        else:
+            print(f"no {source}, the sidebar panel stays empty")
 
     files = list(static.rglob("*.jpg"))
     print(f"{len(files)} images, {sum(f.stat().st_size for f in files) / 2 ** 20:.0f} MB; "
