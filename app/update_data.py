@@ -22,13 +22,8 @@ from PIL import Image
 
 APP = Path(__file__).parent
 RUN = "5_training_communities_pancancer_slides"
-TILE_SIDE = 320  # explorer tiles are shown 160 px wide
-SAMPLE_TILE_SIDE = 200  # sample-page tiles, three to a row
-# Posit Connect Cloud answers 500 on every static image once the app ships a few thousand of them,
-# so the sample pages keep only the tiles they show: the first SAMPLE_TILES of each community
-# covering at least MIN_PERCENT of the slide
-SAMPLE_TILES = 3  # cryptic_sarcoma_sample.TILE_COLUMNS
-MIN_PERCENT = 1
+TILE_SIDE = 320  # tiles are shown 160 px wide in the explorer, a third of a column wide on the sample page
+SAMPLE_TILES = 3  # cryptic_sarcoma_sample.TILE_COLUMNS: the sample pages show no more per community
 HEATMAP_SIDE = 1024  # slide heatmaps are shown up to a page column wide
 
 
@@ -94,12 +89,8 @@ def main():
     # cryptic sarcoma pages
     tiles = pd.read_csv(webapp / "cryptic_sarcomas_tiles.tsv", sep="\t")
     tiles = tiles[tiles.community.isin(keep)]
-    leiden = pd.read_csv(webapp / "cryptic_sarcomas_leiden_embeddings.tsv", sep="\t")
-    shares = leiden.melt(id_vars="wsi_id", var_name="community", value_name="percentage")
-    shares = shares.assign(community=shares.community.astype(int))
-    tiles = (tiles.merge(shares[shares.percentage >= MIN_PERCENT][["wsi_id", "community"]])
-             .groupby(["wsi_id", "community"]).head(SAMPLE_TILES))
-    copy_images(tiles.tile, webapp / "cryptic_tiles", static / "cryptic_tiles", SAMPLE_TILE_SIDE)
+    tiles = tiles.groupby(["wsi_id", "community"]).head(SAMPLE_TILES)
+    copy_images(tiles.tile, webapp / "cryptic_tiles", static / "cryptic_tiles", TILE_SIDE)
     write(tiles.assign(tile=tiles.tile.map(jpg)), "cryptic_sarcomas_tiles.tsv", data)
     slides = pd.read_csv(webapp / "cryptic_sarcoma_slides.tsv", sep="\t")
     copy_images(slides.heatmap.dropna(), heatmaps / "thumbnails", static / "thumbnails", HEATMAP_SIDE)

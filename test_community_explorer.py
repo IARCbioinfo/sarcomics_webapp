@@ -21,18 +21,14 @@ def test():
 
     community = at.sidebar.selectbox[0].value
     grid = tiles_grid(at)
-    assert len(grid) == 20, len(grid)
+    assert len(grid) == 24, len(grid)  # community_explorer.PAGE
     assert set(grid.community) == {community}, set(grid.community)
 
-    at.button[0].click().run()
-    grid = tiles_grid(at)
-    assert len(grid) == 40, len(grid)
-
-    # another community starts from 20 again and shows its own tiles
+    # another community shows its own tiles
     other = int(at.sidebar.selectbox[0].options[2])
     at.sidebar.selectbox[0].set_value(other).run()
     grid = tiles_grid(at)
-    assert len(grid) == 20, len(grid)
+    assert len(grid) == 24, len(grid)  # community_explorer.PAGE
     assert set(grid.community) == {other}, set(grid.community)
 
     # a cryptic sarcoma sample page links here with ?community=N, one link per community
